@@ -16,6 +16,9 @@ ENV https_proxy=${https_proxy}
 ENV LANG=en_US.UTF-8
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GO_VERSION=1.24.3
+# Define build architecture arguments
+ARG BUILDARCH=arm64
+ARG TARGETARCH=arm64
 RUN apt-get update && apt-get install -y apt-utils locales wget curl git netcat-openbsd software-properties-common jq zip unzip
 RUN locale-gen en_US.UTF-8 &&  echo "LANG=en_US.UTF-8" > /etc/default/locale
 RUN for i in {1..5}; do \
@@ -28,13 +31,19 @@ RUN for i in {1..5}; do \
         libreadline-dev default-jre default-jdk cmake flex bison libssl-dev && break; \
         echo "Retrying in 5 seconds... ($i/5)" && sleep 5; \
     done
-ENV JAVA_HOME=/usr/lib/jvm/java-1.11.0-openjdk-amd64
-# need golang to build go tools
-RUN rm -rf /usr/local/go && wget -qO- https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz | tar -C /usr/local -xz
+# Set JAVA_HOME based on architecture
+ENV JAVA_HOME=/usr/lib/jvm/java-1.11.0-openjdk-${TARGETARCH}
+# need golang to build go tools - download appropriate architecture
+RUN rm -rf /usr/local/go && wget -qO- https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz | tar -C /usr/local -xz
 ENV PATH="${PATH}:/usr/local/go/bin"
 # need up-to-date zlib (used by stress-ng static build) to fix security vulnerabilities
 RUN git clone https://github.com/madler/zlib.git && cd zlib && ./configure && make install
-RUN cp /usr/local/lib/libz.a /usr/lib/x86_64-linux-gnu/libz.a
+# Copy libz.a to the appropriate architecture-specific directory
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+        cp /usr/local/lib/libz.a /usr/lib/x86_64-linux-gnu/libz.a; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        cp /usr/local/lib/libz.a /usr/lib/aarch64-linux-gnu/libz.a; \
+    fi
 # Build third-party components
 RUN mkdir workdir
 ADD . /workdir
@@ -49,6 +58,9 @@ ENV http_proxy=${http_proxy}
 ENV https_proxy=${https_proxy}
 ENV LANG=en_US.UTF-8
 ARG DEBIAN_FRONTEND=noninteractive
+# Define build architecture arguments
+ARG BUILDARCH=amd64
+ARG TARGETARCH=amd64
 RUN apt-get update && apt-get install -y apt-utils locales wget curl git netcat-openbsd software-properties-common jq zip unzip
 RUN locale-gen en_US.UTF-8 &&  echo "LANG=en_US.UTF-8" > /etc/default/locale
 RUN for i in {1..5}; do \
